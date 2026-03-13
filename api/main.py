@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, render_template
+from flasgger import Swagger
 import os
 from dotenv import load_dotenv
 import pymysql
@@ -15,15 +16,24 @@ connection = pymysql.connect(
 )
 
 app = Flask(__name__)
-
+app.config['JSON_AS_ASCII'] = False  # 解決中文亂碼問題
+swagger = Swagger(app)               # 初始化 Swagger API 文件
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-
 @app.route("/job/top-skills", methods=["GET"])
 def get_top_skills():
+    """
+    市場熱門觀測站 API (取得主流技能、含金量與熱門職缺)
+    ---
+    tags:
+      - AI 職缺分析
+    responses:
+      200:
+        description: 成功回傳 Top 5 需求技能、高薪技能與熱門職稱
+    """
     connection.ping(reconnect=True)
     with connection.cursor() as cursor:
         # 需求量最高技能 Top 5 (市場主流)
@@ -75,7 +85,6 @@ def get_top_skills():
             "top_job_titles": top_job_titles,
         }
     )
-
 
 if __name__ == "__main__":
     app.run(port=3939, debug=True)
