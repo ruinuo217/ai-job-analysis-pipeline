@@ -331,8 +331,12 @@ def deduplicate_csv(filename="jobs_104_selenium.csv"):
 
     logging.info(f"✅ 去重完成！原始:{before_count} 筆 → 去重後:{after_count} 筆 (移除 {removed} 筆重複)")
 
-    if __name__ == "__main__":
-    crawl_104_jobs_selenium("工程師", max_pages=150)
+# 統一存到 data 資料夾
+DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "104_jobs.csv")
+
+if __name__ == "__main__":
+    crawl_104_jobs_selenium("工程師", max_pages=150, filename=DATA_PATH)
+    deduplicate_csv(DATA_PATH)
     
     # 爬完立刻去重
     deduplicate_csv("jobs_104_selenium.csv")

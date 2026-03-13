@@ -42,8 +42,12 @@ def final_data_cleaning(row):
 
 # 1. 定義要讀取的檔案清單
 file_list = [
-    '104_final.csv', '518_final.csv', '1111_final.csv', 
-    'cake_final.csv', 'Yes123_final.csv', 'Yourator_final.csv'
+    'data/104_jobs.csv', 
+    'data/518_job.csv', 
+    'data/1111_jobs.csv', 
+    'data/cake_jobs.csv', 
+    'data/Yes123_job.csv', 
+    'data/Yourator_job.csv'
 ]
 
 dfs = []
