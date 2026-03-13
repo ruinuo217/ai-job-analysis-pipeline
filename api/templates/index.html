@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 職缺分析 Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.5);
+            --accent-alt: #818cf8;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-color);
+            background-image: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.15), transparent 25%),
+                              radial-gradient(circle at 85% 30%, rgba(129, 140, 248, 0.15), transparent 25%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        nav {
+            width: 100%;
+            padding: 1.5rem 0;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 2rem auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-alt));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            flex-grow: 1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--accent);
+            font-weight: 600;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .error-message {
+            color: #ef4444;
+            text-align: center;
+            padding: 2rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            border-radius: 8px;
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <h1>AI 職缺分析儀表板</h1>
+    </nav>
+
+    <div class="container" id="dashboard">
+        <div class="full-width loading" id="loading">
+            <h2>資料載入中，請稍候...</h2>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2026 AI Job Analysis Pipeline. Powered by Flask & Chart.js.
+    </footer>
+
+    <script>
+        // Chart default settings
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.scale.grid.color = 'rgba(255, 255, 255, 0.05)';
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/job/top-skills');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                renderDashboard(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                const dashboard = document.getElementById('dashboard');
+                dashboard.innerHTML = `
+                    <div class="full-width error-message">
+                        <h2>資料載入失敗</h2>
+                        <p>無法連線至 API，請確認後端服務是否正常運作。</p>
+                    </div>
+                `;
+            }
+        }
+
+        function createCard(title, icon, isFullWidth = false) {
+            const card = document.createElement('div');
+            card.className = 'card' + (isFullWidth ? ' full-width' : '');
+            card.innerHTML = `
+                <h2><span class="card-icon">${icon}</span> ${title}</h2>
+                <div class="chart-container">
+                    <canvas></canvas>
+                </div>
+            `;
+            return card;
+        }
+
+        function renderChart(canvas, type, labels, dataPoints, label, bgColors, indexAxis = 'x') {
+            const ctx = canvas.getContext('2d');
+            new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: dataPoints,
+                        backgroundColor: bgColors,
+                        borderRadius: type === 'bar' ? 6 : 0,
+                        borderWidth: 0,
+                        hoverBackgroundColor: bgColors.map(color => color.replace('0.8', '1'))
+                    }]
+                },
+                options: {
+                    indexAxis: indexAxis,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { size: 14, family: "'Inter', sans-serif" },
+                            bodyFont: { size: 13, family: "'Inter', sans-serif" },
+                            padding: 12,
+                            cornerRadius: 8,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: indexAxis === 'y' },
+                            beginAtZero: true
+                        },
+                        y: {
+                            grid: { display: indexAxis === 'x' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderDashboard(data) {
+            const dashboard = document.getElementById('dashboard');
+            dashboard.innerHTML = ''; // Clear loading
+
+            // 1. Demand Skills Chart (Bar Chart)
+            const demandCard = createCard('市場主流：高需求技能 Top 5', '📊');
+            dashboard.appendChild(demandCard);
+            renderChart(
+                demandCard.querySelector('canvas'), 
+                'bar', 
+                data.top_demand_skills.map(item => item.skill_name), 
+                data.top_demand_skills.map(item => item.demand_count),
+                '職缺數量',
+                ['rgba(56, 189, 248, 0.8)', 'rgba(56, 189, 248, 0.7)', 'rgba(56, 189, 248, 0.6)', 'rgba(56, 189, 248, 0.5)', 'rgba(56, 189, 248, 0.4)']
+            );
+
+            // 2. Salary Skills Chart (Bar Chart)
+            const salaryCard = createCard('談薪武器：高薪技能 Top 5', '💰');
+            dashboard.appendChild(salaryCard);
+            renderChart(
+                salaryCard.querySelector('canvas'), 
+                'bar', 
+                data.top_salary_skills.map(item => item.skill_name), 
+                data.top_salary_skills.map(item => item.avg_salary),
+                '平均薪資 (元)',
+                ['rgba(52, 211, 153, 0.8)', 'rgba(52, 211, 153, 0.7)', 'rgba(52, 211, 153, 0.6)', 'rgba(52, 211, 153, 0.5)', 'rgba(52, 211, 153, 0.4)']
+            );
+
+            // 3. Job Titles (Horizontal Bar Chart)
+            const jobsCard = createCard('熱門職缺：開缺最多 Top 5', '💼', true);
+            dashboard.appendChild(jobsCard);
+            renderChart(
+                jobsCard.querySelector('canvas'), 
+                'bar', 
+                data.top_job_titles.map(item => item.job_title), 
+                data.top_job_titles.map(item => item.opening_count),
+                '職缺數量',
+                ['rgba(167, 139, 250, 0.8)', 'rgba(167, 139, 250, 0.7)', 'rgba(167, 139, 250, 0.6)', 'rgba(167, 139, 250, 0.5)', 'rgba(167, 139, 250, 0.4)'],
+                'y'
+            );
+        }
+
+        // Initialize
+        fetchData();
+    </script>
+</body>
+</html>
