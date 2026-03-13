@@ -4,20 +4,15 @@ from urllib.parse import quote_plus
 import os
 from dotenv import load_dotenv
 
-# 載入 .env 檔案中的環境變數
 load_dotenv()
 
 # =========================================
-# 1. 自動偵測路徑並讀取黃金資料
+# 1. 讀取資料
 # =========================================
-# 取得目前這個 py 檔案所在的資料夾路徑
 base_dir = os.path.dirname(os.path.abspath(__file__))
-
-# 組合出正確的 CSV 路徑：指向同層級的 data 資料夾
 input_file = os.path.join(base_dir, "data", "all_jobs_perfect.csv")
 
 print(f"正在讀取檔案: {input_file}...")
-
 if not os.path.exists(input_file):
     raise FileNotFoundError(f"❌ 找不到檔案！請確認 {input_file} 是否存在。")
 
@@ -25,25 +20,35 @@ df = pd.read_csv(input_file, keep_default_na=False, encoding='utf-8-sig')
 print(f"共讀取到 {len(df)} 筆資料。")
 
 # =========================================
-# 2. 安全設定遠端資料庫連線 (從 .env 讀取)
+# 2. 資料庫連線
 # =========================================
-# 抓取隱藏的密碼與設定
 db_host = os.getenv("DB_HOST")
 db_port = os.getenv("DB_PORT", "3306")
 db_user = os.getenv("DB_USER")
 db_pass = os.getenv("DB_PASS")
 db_name = os.getenv("DB_NAME")
 
-# 防呆機制：確保 .env 有被正確讀取
 if not db_pass:
-    raise ValueError("❌ 找不到資料庫密碼！請確認你有建立 .env 檔案，並且裡面有設定 DB_PASS。")
+    raise ValueError("❌ 找不到資料庫密碼！請確認 .env 檔案設定正確。")
 
 password = quote_plus(db_pass)
 db_url = f"mysql+pymysql://{db_user}:{password}@{db_host}:{db_port}/{db_name}"
 engine = create_engine(db_url)
 print("資料庫連線建立成功。")
 
-print("--- 啟動 Append 匯入模式 ---")
+# =========================================
+# 3. 清空舊資料（先關掉外鍵檢查）
+# =========================================
+print("\n--- 清空舊資料 ---")
+with engine.begin() as conn:
+    conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+    conn.execute(text("TRUNCATE TABLE job_skills_mapping;"))
+    conn.execute(text("TRUNCATE TABLE jobs;"))
+    conn.execute(text("TRUNCATE TABLE skills;"))
+    conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+print("✅ 清空完成，開始重新匯入...")
+
+print("--- 啟動匯入模式 ---")
 try:
     with engine.begin() as conn:
 
@@ -56,7 +61,7 @@ try:
         print(f"  ✅ 成功寫入 {len(jobs_df)} 筆職缺。")
 
         # =========================================
-        # 步驟 B: 技能字典表 (INSERT IGNORE 避免 UNIQUE 衝突)
+        # 步驟 B: 技能字典表
         # =========================================
         print("\n[步驟 B] 正在萃取技能並填入 skills 表...")
         all_skills = set()
@@ -76,7 +81,6 @@ try:
 
     # =========================================
     # 步驟 C: 建立 Mapping 關聯
-    # (在 with block 外，確保 A/B 已 commit)
     # =========================================
     print("\n[步驟 C] 正在對照 ID 並建立關聯紀錄...")
     jobs_db = pd.read_sql(
@@ -88,7 +92,6 @@ try:
         con=engine
     )
 
-    # 製作 uid 對照表
     jobs_db['uid'] = jobs_db['source_platform'] + "_" + jobs_db['original_job_id'].astype(str)
     df['uid'] = df['source_platform'] + "_" + df['original_job_id'].astype(str)
 
@@ -131,7 +134,3 @@ try:
 
 except Exception as e:
     print(f"\n❌ 匯入出錯了！原因: {e}")
-    print("提示：若報 Duplicate entry，請先清空資料表再試：")
-    print("  TRUNCATE TABLE job_skills_mapping;")
-    print("  TRUNCATE TABLE jobs;")
-    print("  TRUNCATE TABLE skills;")
